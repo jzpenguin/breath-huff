@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Bubble Sky</title>
+<style>
+  :root{
+    --deep:#08243B; --sea:#0E3B5C; --sky:#7FD4F0; --sun:#FFD166;
+    --coral:#FF8C6B; --mint:#8FE6C3; --plum:#B79CFF;
+    --paper:#F2F7F9; --dim:rgba(242,247,249,.6); --line:rgba(242,247,249,.18);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    background:linear-gradient(180deg,#061B2E 0%,var(--deep) 40%,var(--sea) 100%);
+    color:var(--paper);font-family:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,sans-serif;
+    font-weight:600;overflow:hidden;touch-action:manipulation;
+  }
+  #app{height:100dvh;height:100vh;max-width:520px;margin:0 auto;display:grid;
+       grid-template-rows:auto 1fr auto;
+       padding:max(10px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom))}
+
+  #top{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dim);min-height:32px}
+  #top b{color:var(--paper)}
+  .ghostbtn{background:none;border:1px solid var(--line);color:var(--dim);font:inherit;
+            font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;cursor:pointer}
+  .ghostbtn.right{margin-left:auto}
+
+  #play{position:relative;overflow:hidden;display:grid;place-items:center;text-align:center}
+  #hint{font-size:15px;color:var(--dim);margin-bottom:14px;min-height:20px}
+  #bignum{font-size:50px;font-weight:800;letter-spacing:-.03em;line-height:1}
+  #sub{font-size:13px;color:var(--dim);margin-top:6px;font-weight:600;min-height:18px}
+
+  #bottom{padding-top:10px}
+  #lvlBar{height:10px;border-radius:999px;background:rgba(242,247,249,.12);overflow:hidden}
+  #lvlFill{height:100%;width:0;background:linear-gradient(90deg,var(--mint),var(--sky));transition:width .07s linear}
+  #meta{display:flex;font-size:12px;color:var(--dim);margin-top:8px}
+  #meta span:last-child{margin-left:auto}
+
+  /* shared bits */
+  .row{display:flex;justify-content:center;align-items:flex-end;gap:10px;flex-wrap:wrap}
+  .candle{width:20px;display:flex;flex-direction:column;align-items:center}
+  .flame{width:15px;height:26px;margin-bottom:3px;border-radius:50% 50% 46% 46%/66% 66% 34% 34%;
+    background:radial-gradient(ellipse at 50% 72%,#FFF3C4 0%,var(--sun) 42%,var(--coral) 78%,rgba(255,140,107,0) 100%);
+    filter:drop-shadow(0 0 12px rgba(255,180,90,.7));animation:flick .45s infinite alternate;transform-origin:50% 100%}
+  @keyframes flick{from{transform:scale(1) skewX(-3deg)}to{transform:scale(1.1,.94) skewX(4deg)}}
+  .candle.out .flame{opacity:0;transform:scale(.2) translateY(-12px);animation:none;transition:.28s}
+  .wick{width:2px;height:6px;background:#3B2B14}
+  .wax{width:20px;border-radius:4px 4px 2px 2px;background:linear-gradient(180deg,#FFF6E6,#D9C6A8)}
+
+  .track{position:relative;height:110px;margin:0 auto;max-width:330px;
+         border-bottom:2px dashed rgba(242,247,249,.22)}
+  .mover{position:absolute;bottom:6px;left:0;transition:left .12s linear}
+  .goal{position:absolute;right:0;bottom:4px;width:34px;height:52px;
+        border:3px solid rgba(242,247,249,.4);border-right:none;border-radius:6px 0 0 6px}
+
+  .tissue{width:74px;height:92px;background:linear-gradient(180deg,#fff,#D7E6EC);
+          border-radius:5px 5px 12px 12px;box-shadow:0 6px 18px rgba(0,0,0,.35);
+          transition:transform .09s linear;transform-origin:50% 100%}
+
+  #paintCanvas{border-radius:16px;background:#F7F3EA;max-width:100%}
+
+  .repdots{display:flex;gap:7px;justify-content:center;margin-top:18px}
+  .dot{width:11px;height:11px;border-radius:50%;background:rgba(242,247,249,.2)}
+  .dot.on{background:var(--mint)}
+
+  /* overlay + menus */
+  #ov{position:fixed;inset:0;padding:22px;background:rgba(6,27,46,.95);
+      backdrop-filter:blur(8px);z-index:20;overflow-y:auto;display:grid;place-items:start center}
+  #ov.hide{display:none}
+  .card{max-width:360px;width:100%;text-align:center;padding:12px 0 40px}
+  .card h1{font-size:40px;line-height:.95;margin:0 0 10px;font-weight:800;letter-spacing:-.03em}
+  .card h2{font-size:22px;margin:0 0 10px;font-weight:800;letter-spacing:-.02em}
+  .card p{font-size:14.5px;line-height:1.55;color:var(--dim);font-weight:500;margin:0 0 16px}
+  .btn{width:100%;padding:15px;border:none;border-radius:15px;background:var(--sun);
+       color:#33240A;font:inherit;font-size:16px;font-weight:800;cursor:pointer;margin-top:9px}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--dim);font-weight:600}
+  .btn:active{transform:translateY(1px)}
+  .note{font-size:12px;color:rgba(242,247,249,.42);font-weight:500;line-height:1.5;margin-top:20px}
+  .rule{height:1px;background:var(--line);margin:18px 0}
+
+  .grouphead{text-align:left;font-size:13px;color:var(--dim);margin:22px 0 8px;font-weight:700}
+  .gamebtn{width:100%;display:flex;align-items:center;gap:12px;text-align:left;
+    padding:13px 14px;margin-bottom:8px;border-radius:14px;cursor:pointer;
+    background:rgba(242,247,249,.07);border:1px solid var(--line);color:var(--paper);font:inherit}
+  .gamebtn .nm{font-size:15px;font-weight:700}
+  .gamebtn .ds{font-size:12px;color:var(--dim);font-weight:500;margin-top:2px}
+  .gamebtn .pip{width:9px;height:9px;border-radius:50%;flex:none}
+  .pip.short{background:var(--coral)} .pip.long{background:var(--mint)} .pip.huff{background:var(--plum)}
+
+  .field{display:flex;align-items:center;gap:12px;margin-bottom:12px;text-align:left}
+  .field label{flex:1;font-size:14px}
+  .field small{display:block;font-size:11.5px;color:var(--dim);font-weight:500;margin-top:2px}
+  .field input{width:76px;padding:10px;border-radius:11px;text-align:center;
+    background:rgba(242,247,249,.08);border:1px solid var(--line);color:var(--paper);
+    font:inherit;font-size:16px;font-weight:700}
+
+  table.rec{width:100%;border-collapse:collapse;font-size:12px;font-weight:600}
+  table.rec th{color:var(--dim);font-weight:600;font-size:11px;padding:4px 0}
+  table.rec td:first-child,table.rec th:first-child{text-align:left;width:38%}
+  table.rec td{padding:3px 0;text-align:center}
+  .cell{width:100%;padding:7px 0;border-radius:7px;background:rgba(242,247,249,.07);
+        border:1px solid var(--line);color:var(--paper);font:inherit;font-size:12px;cursor:pointer}
+  .cell.tick{background:rgba(143,230,195,.22);border-color:rgba(143,230,195,.5)}
+  .cell.cough{background:rgba(255,140,107,.22);border-color:rgba(255,140,107,.5)}
+
+  #testBar{height:12px;border-radius:999px;background:rgba(242,247,249,.14);overflow:hidden;margin-top:6px}
+  #testFill{height:100%;width:0;background:var(--mint)}
+  @media (prefers-reduced-motion:reduce){ .flame{animation:none} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <span id="crumb">Bubble Sky</span>
+    <button class="ghostbtn right" id="backBtn" type="button">Menu</button>
+  </div>
+  <div id="play"></div>
+  <div id="bottom">
+    <div id="lvlBar"><div id="lvlFill"></div></div>
+    <div id="meta"><span id="modeLabel"></span><span id="scoreLabel"></span></div>
+  </div>
+</div>
+<div id="ov"><div class="card" id="card"></div></div>
+
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const play = $("play");
+
+/* ================= settings + storage ================= */
+const DEF = { exhale:4, breaths:10, sets:2, rest:45, inhale:3, reps:4, sens:1 };
+let cfg = Object.assign({}, DEF);
+const store = {
+  get(k,f){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; }catch(e){ return f; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+cfg = Object.assign(cfg, store.get("bs_cfg", {}));
+
+function weekKey(){
+  const d = new Date(); const day = (d.getDay()+6)%7;      // Monday = 0
+  d.setDate(d.getDate()-day);
+  return "bs_rec_"+d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+}
+function markToday(activity){
+  const rec = store.get(weekKey(), {});
+  const day = (new Date().getDay()+6)%7;
+  rec[activity] = rec[activity] || [0,0,0,0,0,0,0];
+  if(rec[activity][day] === 0) rec[activity][day] = 1;
+  store.set(weekKey(), rec);
+}
+
+/* ================= microphone ================= */
+const mic = {
+  on:false, a:null, buf:null, floor:0, peak:1, level:0, fast:0,
+  lowFloor:0, lowPeak:1, low:0, blow:0, blowT:0, blowing:false,
+  burst:null, onBlast:null,
+  async start(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+      throw new Error("This browser won't give the page a microphone.");
+    const s = await navigator.mediaDevices.getUserMedia({audio:{
+      echoCancellation:false, noiseSuppression:false, autoGainControl:false }});
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC(); if(ctx.state === "suspended") await ctx.resume();
+    const a = ctx.createAnalyser(); a.fftSize = 1024; a.smoothingTimeConstant = 0.35;
+    ctx.createMediaStreamSource(s).connect(a);
+    this.a = a; this.buf = new Uint8Array(a.frequencyBinCount); this.on = true;
+  },
+  calibrate(ms=1700){
+    return new Promise(res=>{
+      let n=0, wide=0, low=0, wideMax=0, lowMax=0;
+      const t = setInterval(()=>{
+        this.a.getByteFrequencyData(this.buf);
+        let w=0,c=0; for(let i=3;i<=90;i++){ w+=this.buf[i]; c++; } w/=c;
+        let l=0;     for(let i=1;i<=16;i++) l+=this.buf[i]; l/=16;
+        wide+=w; low+=l; wideMax=Math.max(wideMax,w); lowMax=Math.max(lowMax,l); n++;
+      },40);
+      setTimeout(()=>{
+        clearInterval(t);
+        // sit above the loudest thing heard while idle, not just the average
+        this.floor    = Math.max((n?wide/n:0)+6, wideMax+2);
+        this.peak     = this.floor + 26;
+        this.lowFloor = Math.max((n?low/n:0)+8, lowMax+4);
+        this.lowPeak  = this.lowFloor + 30;
+        res();
+      }, ms);
+    });
+  },
+  read(dt){
+    if(!this.on) return 0;
+    this.a.getByteFrequencyData(this.buf);
+
+    // wide band — drives huff and puff detection, which works well as it is
+    let sum=0,n=0; for(let i=3;i<=90;i++){ sum+=this.buf[i]; n++; }
+    const v = sum/n;
+    if(v > this.peak) this.peak = v;
+    this.peak = Math.max(this.floor+16, this.peak*0.9994);
+    const p = Math.max(0, Math.min(1, (v - this.floor)/Math.max(8, this.peak - this.floor)));
+    this.fast  += (p - this.fast)*0.55;
+    this.level += (p - this.level)*0.28;
+    this.trackBurst(dt);
+
+    // low band (~40-700 Hz) — breath lives here, most room noise doesn't
+    let l=0; for(let i=1;i<=16;i++) l+=this.buf[i]; l/=16;
+    if(l > this.lowPeak) this.lowPeak = l;
+    this.lowPeak = Math.max(this.lowFloor+18, this.lowPeak*0.9994);
+    const q = Math.max(0, Math.min(1, (l - this.lowFloor)/Math.max(10, this.lowPeak - this.lowFloor)));
+    this.low += (q - this.low)*0.30;
+
+    // gate: has to be clearly above the room, and stay there, before it counts
+    const s = cfg.sens || 1;
+    const ON = 0.34/s, OFF = 0.20/s;
+    if(this.low > (this.blowing ? OFF : ON)) this.blowT += dt;
+    else this.blowT = 0;
+    if(!this.blowing && this.blowT > 0.18) this.blowing = true;
+    if(this.blowing && this.blowT === 0) this.blowing = false;
+    this.blow = this.blowing ? this.low : 0;
+    return this.low;
+  },
+  // a burst = one continuous breath. Reports peak strength and how long it lasted.
+  trackBurst(dt){
+    const ON = 0.20, OFF = 0.12;
+    if(!this.burst && this.fast > ON){
+      this.burst = { t:0, peak:this.fast, quiet:0, rise:this.fast };
+    }else if(this.burst){
+      this.burst.t += dt;
+      this.burst.peak = Math.max(this.burst.peak, this.fast);
+      if(this.burst.t < 0.25) this.burst.rise = Math.max(this.burst.rise, this.fast);
+      if(this.fast < OFF){
+        this.burst.quiet += dt;
+        if(this.burst.quiet > 0.22){
+          const b = this.burst; this.burst = null;
+          if(b.t > 0.12 && this.onBlast) this.onBlast({
+            peak:b.peak, dur:b.t - b.quiet, sharp:b.rise > 0.32
+          });
+        }
+      }else this.burst.quiet = 0;
+    }
+  }
+};
+
+/* ================= engine ================= */
+let view = "home", G = null, raf = null, lastT = 0;
+function loop(now){
+  raf = requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now-lastT)/1000); lastT = now;
+  mic.read(dt);
+  const bar = $("lvlFill");
+  bar.style.width = (mic.low*100).toFixed(0)+"%";
+  bar.style.opacity = mic.blowing ? "1" : ".3";   // faint = heard, but not counted
+  if(G && G.update) G.update(dt, mic.blow);
+}
+mic.onBlast = b => { if(G && G.blast) G.blast(b); };
+
+function setChrome(title, mode, score){
+  $("crumb").textContent = title;
+  $("modeLabel").textContent = mode || "";
+  $("scoreLabel").textContent = score || "";
+}
+function dots(n, done){
+  return '<div class="repdots">'+Array.from({length:n},(_,i)=>
+    '<div class="dot'+(i<done?' on':'')+'"></div>').join('')+'</div>';
+}
+function finishGame(name, line){
+  G = null;
+  markToday(name);
+  show(`<h2>${line}</h2>
+        <p>That one's ticked off for today.</p>
+        <button class="btn" id="again">Play it again</button>
+        <button class="btn ghost" id="menu">Pick another game</button>`,
+    { again: ()=>startGame(name), menu: gamesMenu });
+}
+
+/* ================= the games ================= */
+const GAMES = {
+
+/* ---- SHORT BREATHS ---- */
+"Candles":{
+  group:"short", desc:"One breath for each candle",
+  build(){
+    const n = cfg.reps;
+    let out = 0;
+    play.innerHTML = `<div><div id="hint">Big breath in, then one puff per candle</div>
+      <div class="row" id="cds"></div><div id="sub" style="margin-top:20px">${n} to go</div></div>`;
+    for(let i=0;i<n;i++){
+      const c = document.createElement("div"); c.className="candle";
+      c.innerHTML = `<div class="flame"></div><div class="wick"></div>
+                     <div class="wax" style="height:${52+(i%3)*14}px"></div>`;
+      $("cds").appendChild(c);
+    }
+    setChrome("Candles","Short breaths","");
+    return {
+      blast(b){
+        if(b.peak < 0.25 || out >= n) return;
+        $("cds").children[out].classList.add("out"); out++;
+        $("sub").textContent = out >= n ? "All out!" : (n-out)+" to go";
+        setChrome("Candles","Short breaths", out+"/"+n);
+        if(out >= n) setTimeout(()=>finishGame("Candles","Every candle out"), 700);
+      }
+    };
+  }
+},
+
+"Cotton ball":{
+  group:"short", desc:"Blow it off your hand — how far?",
+  build(){
+    let rep = 0, best = 0;
+    play.innerHTML = `<div style="width:100%"><div id="hint">Sharp puff — send it flying</div>
+      <div class="track"><div class="mover" id="ball" style="left:0">
+        <div style="width:30px;height:30px;border-radius:50%;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.4)"></div>
+      </div></div>
+      <div id="sub">Best so far: 0 cm</div>${dots(cfg.reps,0)}</div>`;
+    setChrome("Cotton ball","Short breaths","");
+    return {
+      blast(b){
+        if(b.peak < 0.22 || rep >= cfg.reps) return;
+        const cm = Math.round(b.peak * 120);
+        best = Math.max(best, cm);
+        const ball = $("ball");
+        ball.style.left = Math.min(88, b.peak*88)+"%";
+        setTimeout(()=>{ ball.style.left = "0"; }, 900);
+        rep++;
+        $("sub").textContent = "That one: "+cm+" cm · best "+best+" cm";
+        play.querySelector(".repdots").outerHTML = dots(cfg.reps, rep);
+        setChrome("Cotton ball","Short breaths", rep+"/"+cfg.reps);
+        if(rep >= cfg.reps) setTimeout(()=>finishGame("Cotton ball","Furthest: "+best+" cm"), 900);
+      }
+    };
+  }
+},
+
+/* ---- LONG BREATHS ---- */
+"Blow football":{
+  group:"long", desc:"Long breaths to roll it into the goal",
+  build(){
+    let pos = 0, rep = 0, blowing = false;
+    play.innerHTML = `<div style="width:100%"><div id="hint">Big breath in, then a long blow</div>
+      <div class="track"><div class="goal"></div><div class="mover" id="ball" style="left:0;transition:none">
+        <div style="width:26px;height:26px;border-radius:50%;background:#fff"></div></div></div>
+      <div id="sub">Roll it all the way in</div>${dots(cfg.reps+1,0)}</div>`;
+    setChrome("Blow football","Long breaths","");
+    return {
+      update(dt, lvl){
+        const on = lvl > 0;
+        if(on){ pos = Math.min(1, pos + (0.05 + lvl*0.15)*dt); blowing = true; }
+        else if(blowing){ blowing = false; rep++;
+          play.querySelector(".repdots").outerHTML = dots(cfg.reps+1, rep);
+        }
+        $("ball").style.left = (pos*86)+"%";
+        if(pos >= 1){ $("sub").textContent = "Goal!";
+          const r = rep; G = null; setTimeout(()=>finishGame("Blow football","Goal in "+Math.max(1,r+1)+" breaths"), 800); }
+      }
+    };
+  }
+},
+
+"Tissue lift":{
+  group:"long", desc:"Keep it floating as long as you can",
+  build(){
+    let rep = 0, held = 0, best = 0, up = false, grace = 0, lift = 0;
+    const target = cfg.exhale;
+    play.innerHTML = `<div><div id="hint">Keep it up for ${target} seconds</div>
+      <div style="height:170px;display:grid;place-items:end center">
+        <div class="tissue" id="tis"></div></div>
+      <div id="bignum" style="margin-top:14px">0.0</div>
+      <div id="sub">of ${target}s · best 0.0</div>${dots(cfg.reps,0)}</div>`;
+    setChrome("Tissue lift","Long breaths","");
+    function endRep(){
+      up = false; best = Math.max(best, held); rep++;
+      $("sub").textContent = "of "+target+"s · best "+best.toFixed(1);
+      play.querySelector(".repdots").outerHTML = dots(cfg.reps, rep);
+      setChrome("Tissue lift","Long breaths", rep+"/"+cfg.reps);
+      held = 0; grace = 0; $("bignum").textContent = "0.0";
+      if(rep >= cfg.reps){ const b = best; G = null;
+        setTimeout(()=>finishGame("Tissue lift","Longest: "+b.toFixed(1)+" seconds"), 600); }
+    }
+    return {
+      update(dt, lvl){
+        const on = lvl > 0;
+        lift += ((on ? lvl : 0) - lift) * 0.2;
+        $("tis").style.transform = "translateY(-"+(lift*95).toFixed(0)+"px) rotate("+(lift*7).toFixed(1)+"deg)";
+        if(on){
+          held += dt; up = true; grace = 0;
+          $("bignum").textContent = held.toFixed(1);
+          $("hint").textContent = held >= target ? "Brilliant — keep going if you can"
+                                                 : "Keep it up for "+target+" seconds";
+        }else if(up){
+          // a tiny gap shouldn't end the breath — it gives her a moment to recover
+          grace += dt;
+          $("hint").textContent = "Still going?";
+          if(grace > 0.8) endRep();
+        }
+      }
+    };
+  }
+},
+
+"Blow painting":{
+  group:"long", desc:"Breath spreads the paint — keep the picture",
+  build(){
+    let rep = 0, blowing = false, angle = -Math.PI/2;
+    play.innerHTML = `<div style="width:100%"><div id="hint">Long steady blows spread the paint</div>
+      <canvas id="paintCanvas" width="300" height="300"></canvas>
+      <div id="sub">Blow, pause, blow again — it changes direction</div>${dots(cfg.reps,0)}</div>`;
+    const cv = $("paintCanvas"), cx = cv.getContext("2d");
+    cx.fillStyle = "#F7F3EA"; cx.fillRect(0,0,300,300);
+    const cols = ["#E4572E","#2B7FA8","#F2B705","#5B8C5A","#8B5FBF","#D65A9B"];
+    let parts = [];
+    function seed(){
+      const c = cols[Math.floor(Math.random()*cols.length)];
+      for(let i=0;i<26;i++) parts.push({
+        x:150+(Math.random()*30-15), y:150+(Math.random()*30-15),
+        vx:0, vy:0, r:2+Math.random()*5, c
+      });
+    }
+    seed();
+    setChrome("Blow painting","Long breaths","");
+    return {
+      update(dt, lvl){
+        const on = lvl > 0;
+        if(on){
+          blowing = true;
+          for(const p of parts){
+            p.vx += Math.cos(angle)*lvl*260*dt + (Math.random()-.5)*22*dt;
+            p.vy += Math.sin(angle)*lvl*260*dt + (Math.random()-.5)*22*dt;
+          }
+        }else if(blowing){
+          blowing = false; rep++; angle += 1.4 + Math.random()*1.2;
+          play.querySelector(".repdots").outerHTML = dots(cfg.reps, rep);
+          setChrome("Blow painting","Long breaths", rep+"/"+cfg.reps);
+          if(rep >= cfg.reps){ G = null;
+            setTimeout(()=>finishGame("Paint Blowing","Picture finished"), 900); return; }
+          seed();
+        }
+        for(const p of parts){
+          p.x += p.vx*dt; p.y += p.vy*dt; p.vx *= 0.94; p.vy *= 0.94;
+          cx.fillStyle = p.c; cx.globalAlpha = 0.5;
+          cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 6.283); cx.fill();
+        }
+        cx.globalAlpha = 1;
+        parts = parts.filter(p => p.x > -20 && p.x < 320 && p.y > -20 && p.y < 320);
+      }
+    };
+  }
+},
+
+"Windmill":{
+  group:"long", desc:"Keep it spinning — count the turns",
+  build(){
+    let spin = 0, ang = 0, turns = 0, rep = 0, blowing = false;
+    play.innerHTML = `<div><div id="hint">A long breath keeps it turning</div>
+      <svg width="180" height="180" viewBox="0 0 170 170">
+        <g id="pw" transform-origin="85 85">
+          <path d="M85 85 L85 18 Q118 22 112 58 Z" fill="#8FE6C3"/>
+          <path d="M85 85 L152 85 Q148 118 112 112 Z" fill="#FFD166"/>
+          <path d="M85 85 L85 152 Q52 148 58 112 Z" fill="#FF8C6B"/>
+          <path d="M85 85 L18 85 Q22 52 58 58 Z" fill="#B79CFF"/>
+        </g><circle cx="85" cy="85" r="8" fill="#F2F7F9"/></svg>
+      <div id="bignum">0</div><div id="sub">turns</div>${dots(cfg.reps,0)}</div>`;
+    setChrome("Windmill","Long breaths","");
+    return {
+      update(dt, lvl){
+        spin += lvl*1.7*dt; spin -= spin*0.85*dt; spin = Math.max(0, spin);
+        ang += spin*760*dt; turns = Math.floor(ang/360);
+        $("pw").setAttribute("transform","rotate("+ang+" 85 85)");
+        $("bignum").textContent = turns;
+        const on = lvl > 0;
+        if(on) blowing = true;
+        else if(blowing && spin < 0.05){
+          blowing = false; rep++;
+          play.querySelector(".repdots").outerHTML = dots(cfg.reps, rep);
+          if(rep >= cfg.reps){ const t = turns; G = null;
+            setTimeout(()=>finishGame("Windmills", t+" turns altogether"), 600); }
+        }
+      }
+    };
+  }
+},
+
+/* ---- HUFFS ---- */
+"Huff the tissue":{
+  group:"huff", desc:"Short sharp huffs, not long blows",
+  build(){
+    let rep = 0, dist = 0;
+    play.innerHTML = `<div style="width:100%"><div id="hint">Huff like you're misting a mirror — mouth open, quick</div>
+      <div class="track"><div class="mover" id="tis" style="left:0"><div class="tissue" style="width:44px;height:56px"></div></div></div>
+      <div id="sub">Push it further each time</div>${dots(cfg.reps,0)}</div>`;
+    setChrome("Huff the tissue","Huffs","");
+    return {
+      blast(b){
+        if(rep >= cfg.reps) return;
+        const isHuff = b.dur < 1.4 && b.sharp;
+        if(!isHuff){
+          $("sub").textContent = b.dur >= 1.4 ? "That was a blow — try a quick huff" : "A bit sharper";
+          return;
+        }
+        dist = Math.min(86, dist + b.peak*34);
+        $("tis").style.left = dist+"%";
+        rep++;
+        $("sub").textContent = "Good huff";
+        play.querySelector(".repdots").outerHTML = dots(cfg.reps, rep);
+        setChrome("Huff the tissue","Huffs", rep+"/"+cfg.reps);
+        if(rep >= cfg.reps) setTimeout(()=>finishGame("Huffing (short/long)", rep+" clean huffs"), 800);
+      }
+    };
+  }
+},
+
+"Huff the tube":{
+  group:"huff", desc:"Fire the cotton wool out of the tube",
+  build(){
+    let rep = 0, best = 0;
+    play.innerHTML = `<div style="width:100%"><div id="hint">Lips sealed round the tube — one hard huff</div>
+      <div class="track">
+        <div style="position:absolute;left:0;bottom:6px;width:70px;height:34px;border-radius:6px;background:#C9A227;opacity:.6"></div>
+        <div class="mover" id="cot" style="left:4%">
+          <div style="width:26px;height:26px;border-radius:50%;background:#fff"></div></div></div>
+      <div id="sub">Best: 0 cm</div>${dots(cfg.reps,0)}</div>`;
+    setChrome("Huff the tube","Huffs","");
+    return {
+      blast(b){
+        if(rep >= cfg.reps) return;
+        if(b.dur >= 1.6){ $("sub").textContent = "Too long — one sharp huff"; return; }
+        const cm = Math.round(b.peak*140); best = Math.max(best, cm);
+        $("cot").style.left = Math.min(86, 4 + b.peak*82)+"%";
+        setTimeout(()=>{ const c = $("cot"); if(c) c.style.left = "4%"; }, 900);
+        rep++;
+        $("sub").textContent = "That one: "+cm+" cm · best "+best+" cm";
+        play.querySelector(".repdots").outerHTML = dots(cfg.reps, rep);
+        setChrome("Huff the tube","Huffs", rep+"/"+cfg.reps);
+        if(rep >= cfg.reps) setTimeout(()=>finishGame("Huffing (short/long)","Furthest: "+best+" cm"), 900);
+      }
+    };
+  }
+}
+};
+
+/* ================= bubble PEP session ================= */
+function bubbleSession(){
+  let S = { set:1, breath:1, phase:"inhale", t:0, blown:0, quiet:0, bubbles:0 };
+  play.innerHTML = `<div><div id="hint">Getting ready</div>
+    <div id="bignum">—</div><div id="sub"></div>
+    <div id="cue" style="margin-top:16px;font-size:18px;font-weight:800;min-height:24px"></div></div>`;
+  setChrome("Bubble PEP","Bubble session","");
+  G = {
+    update(dt, lvl){
+      S.t += dt;
+      setChrome("Bubble PEP","Set "+S.set+"/"+cfg.sets, "Breath "+Math.min(S.breath,cfg.breaths)+"/"+cfg.breaths);
+      if(S.phase === "inhale"){
+        const left = Math.max(0, cfg.inhale - S.t);
+        $("hint").textContent = "Breathe in";
+        $("bignum").textContent = Math.ceil(left); $("sub").textContent = "";
+        $("cue").textContent = "slow and easy";
+        if(left <= 0){ S.phase="exhale"; S.t=0; S.blown=0; S.quiet=0; }
+        return;
+      }
+      if(S.phase === "exhale"){
+        $("hint").textContent = "Blow bubbles";
+        const hearing = lvl > 0;
+        if(hearing){ S.blown += dt; S.quiet = 0; } else if(S.blown > 0) S.quiet += dt;
+        $("bignum").textContent = S.blown.toFixed(1);
+        $("sub").textContent = "of "+cfg.exhale+"s";
+        $("cue").textContent = hearing ? "keep it going" : (S.blown>0 ? "" : "start when ready");
+        const ended = (S.blown > 0.4 && S.quiet > 0.7) || S.blown >= cfg.exhale*1.8;
+        if(ended || S.t > cfg.exhale*3+8){
+          S.bubbles++; S.breath++; S.t = 0;
+          if(S.breath > cfg.breaths){
+            if(S.set >= cfg.sets){ G = null; markToday("Bubble"); return finishGame("Bubble", S.bubbles+" breaths done"); }
+            S.phase = "rest";
+          } else S.phase = "inhale";
+        }
+        return;
+      }
+      if(S.phase === "rest"){
+        const left = Math.max(0, cfg.rest - S.t);
+        $("hint").textContent = "Rest and clear";
+        $("bignum").textContent = Math.ceil(left); $("sub").textContent = "seconds";
+        $("cue").textContent = "huff and cough if you need to";
+        if(left <= 0){ S.set++; S.breath=1; S.phase="inhale"; S.t=0; }
+      }
+    }
+  };
+  hide();
+}
+
+/* ================= screens ================= */
+function show(html, handlers){
+  $("card").innerHTML = html; $("ov").classList.remove("hide"); G = null;
+  for(const k in handlers){ const el = $(k); if(el) el.addEventListener("click", handlers[k]); }
+}
+function hide(){ $("ov").classList.add("hide"); }
+
+function startGame(name){
+  const def = GAMES[name]; if(!def) return gamesMenu();
+  hide(); G = def.build();
+}
+
+function needMic(then){
+  show(`<h2>Listening to the room</h2><p>Keep quiet for a second while it works out the background noise.</p>`, {});
+  (async ()=>{
+    try{ if(!mic.on) await mic.start(); await mic.calibrate(); then(); }
+    catch(err){
+      const denied = err && (err.name === "NotAllowedError" || err.name === "SecurityError");
+      show(`<h2>No microphone</h2>
+        <p>${denied ? "The microphone was blocked. Check the padlock in the address bar, or Android Settings → Apps → Chrome → Permissions → Microphone."
+                    : (err && err.message) || "Couldn't reach the microphone."}</p>
+        <button class="btn" id="back">Back</button>`, { back: home });
+    }
+  })();
+}
+
+function home(){
+  G = null; setChrome("Bubble Sky","","");
+  play.innerHTML = "";
+  show(`<h1>Bubble Sky</h1>
+    <p>Blowing games for physio time. The phone listens through the microphone —
+    nothing is recorded or sent anywhere.</p>
+    <button class="btn" id="games">Blowing games</button>
+    <button class="btn ghost" id="pep">Bubble PEP session</button>
+    <button class="btn ghost" id="rec">This week's record</button>
+    <button class="btn ghost" id="set">Settings</button>
+    <p class="note">A homemade toy to make physio less boring. Not a medical device,
+    it measures nothing clinical, and it doesn't replace the routine your CF team set.
+    Use it alongside their instructions, never instead of them.</p>`,
+    { games: ()=>needMic(gamesMenu), pep: ()=>needMic(bubbleSession),
+      rec: record, set: settings });
+}
+
+function gamesMenu(){
+  G = null; play.innerHTML = "";
+  const groups = [
+    ["short","Short breaths","One quick puff at a time"],
+    ["long","Long breaths","Big breath in, then blow right out"],
+    ["huff","Huffs","Fast squeeze out, mouth open"]
+  ];
+  let html = `<h2>Blowing games</h2>
+    <p>Mix them up — short, long and huffs all do different jobs.</p>`;
+  for(const [key,label,blurb] of groups){
+    html += `<div class="grouphead">${label} — ${blurb}</div>`;
+    for(const name in GAMES){
+      if(GAMES[name].group !== key) continue;
+      html += `<button class="gamebtn" data-g="${name}">
+        <div class="pip ${key}"></div>
+        <div><div class="nm">${name}</div><div class="ds">${GAMES[name].desc}</div></div></button>`;
+    }
+  }
+  html += `<div class="rule"></div>
+    <button class="btn ghost" id="recal">Re-measure the room</button>
+    <button class="btn ghost" id="back">Back</button>`;
+  show(html, {
+    back: home,
+    recal: ()=>{
+      show(`<h2>Listening to the room</h2><p>Keep quiet for a second.</p>`, {});
+      mic.calibrate().then(gamesMenu);
+    }
+  });
+  $("card").querySelectorAll(".gamebtn").forEach(b =>
+    b.addEventListener("click", ()=>startGame(b.dataset.g)));
+}
+
+function record(){
+  const rec = store.get(weekKey(), {});
+  const acts = ["Bubble","Candles","Cotton ball","Blow football","Tissue lift",
+                "Paint Blowing","Windmills","Huffing (short/long)"];
+  const days = ["M","T","W","T","F","S","S"];
+  let html = `<h2>This week</h2><p>Tap a box to tick it, tap again for a cough.</p>
+    <table class="rec"><tr><th></th>${days.map(d=>`<th>${d}</th>`).join("")}</tr>`;
+  acts.forEach(a=>{
+    html += `<tr><td>${a}</td>`;
+    for(let d=0;d<7;d++){
+      const v = (rec[a] && rec[a][d]) || 0;
+      html += `<td><button class="cell ${v===1?'tick':v===2?'cough':''}"
+        data-a="${a}" data-d="${d}">${v===1?"✓":v===2?"c":""}</button></td>`;
+    }
+    html += `</tr>`;
+  });
+  html += `</table><div class="rule"></div><button class="btn ghost" id="back">Back</button>`;
+  show(html, { back: home });
+  $("card").querySelectorAll(".cell").forEach(c => c.addEventListener("click", ()=>{
+    const r = store.get(weekKey(), {});
+    const a = c.dataset.a, d = +c.dataset.d;
+    r[a] = r[a] || [0,0,0,0,0,0,0];
+    r[a][d] = (r[a][d]+1) % 3;
+    store.set(weekKey(), r); record();
+  }));
+}
+
+function settings(){
+  show(`<h2>Settings</h2>
+    <p>Put in whatever her CF team have asked for. These are only starting guesses.</p>
+    <div class="field"><label>Repeats per game<small>the leaflet suggests three or four</small></label>
+      <input id="f_reps" type="number" min="1" max="12" value="${cfg.reps}"></div>
+    <div class="field"><label>Microphone sensitivity<small>lower it if noise sets things off; raise it if quiet breaths are missed</small></label>
+      <input id="f_sens" type="number" min="0.5" max="2" step="0.1" value="${cfg.sens}"></div>
+    <div class="rule"></div>
+    <div class="field"><label>PEP breath length<small>seconds of bubbling</small></label>
+      <input id="f_exhale" type="number" min="1" max="30" value="${cfg.exhale}"></div>
+    <div class="field"><label>PEP breaths per set</label>
+      <input id="f_breaths" type="number" min="1" max="40" value="${cfg.breaths}"></div>
+    <div class="field"><label>PEP sets</label>
+      <input id="f_sets" type="number" min="1" max="10" value="${cfg.sets}"></div>
+    <div class="field"><label>Rest between sets<small>seconds to huff and cough</small></label>
+      <input id="f_rest" type="number" min="5" max="300" value="${cfg.rest}"></div>
+    <div class="field"><label>Breathe-in cue<small>seconds</small></label>
+      <input id="f_inhale" type="number" min="1" max="15" value="${cfg.inhale}"></div>
+    <div class="rule"></div>
+    <button class="btn" id="save">Save</button>
+    <button class="btn ghost" id="reset">Back to defaults</button>`,
+  {
+    save: ()=>{
+      const num=(id,lo,hi,fb)=>{ const v=parseFloat($(id).value);
+        return isNaN(v)?fb:Math.max(lo,Math.min(hi,v)); };
+      cfg.reps    = Math.round(num("f_reps",1,12,DEF.reps));
+      cfg.sens    = num("f_sens",0.5,2,DEF.sens);
+      cfg.exhale  = num("f_exhale",1,30,DEF.exhale);
+      cfg.breaths = Math.round(num("f_breaths",1,40,DEF.breaths));
+      cfg.sets    = Math.round(num("f_sets",1,10,DEF.sets));
+      cfg.rest    = Math.round(num("f_rest",5,300,DEF.rest));
+      cfg.inhale  = num("f_inhale",1,15,DEF.inhale);
+      store.set("bs_cfg", cfg); home();
+    },
+    reset: ()=>{ cfg = Object.assign({}, DEF); store.set("bs_cfg", cfg); settings(); }
+  });
+}
+
+$("backBtn").addEventListener("click", ()=>{ G = null; gamesMenu(); });
+home();
+lastT = performance.now();
+raf = requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
